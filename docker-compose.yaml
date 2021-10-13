@@ -5,6 +5,13 @@ services:
     container_name: 'mongo'
     ports:
       - '27017:27017'
+  consul:
+    image: consul:latest
+    container_name: 'consul'
+    ports:
+      - "8300:8300"
+      - "8400:8400"
+      - "8500:8500"
   account:
     container_name: 'account'
     build: './account'
@@ -12,3 +19,4 @@ services:
       - '8080:8080'
     depends_on:
       - 'mongo'
+      - 'consul'
