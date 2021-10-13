@@ -21,7 +21,7 @@ import (
 
 const (
 	defaultPort		= "8080"
-	dbsource		= "mongodb://localhost:27017"
+	dbsource		= "mongodb://mongo:27017"
 	dbname			= "gokitexample"
 )
 
