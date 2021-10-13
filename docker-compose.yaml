@@ -9,6 +9,22 @@ services:
     container_name: 'account'
     build: './account'
     ports:
+      - '8081:8080'
+    depends_on:
+      - 'mongo'
+  catalog:
+    container_name: 'catalog'
+    build: './catalog'
+    environment:
+      - CONSUL_HTTP_ADDR=consul:8500
+    ports:
       - '8080:8080'
     depends_on:
       - 'mongo'
+      - 'consul'
+  consul:
+    image: consul
+    container_name: consul
+    restart: always
+    ports:
+      - "8500:8500"

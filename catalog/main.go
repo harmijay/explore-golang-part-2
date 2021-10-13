@@ -12,6 +12,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	//"strconv"
+	consulapi "github.com/hashicorp/consul/api"
+	"strings"
 	"syscall"
 )
 
@@ -20,6 +23,11 @@ const (
 )
 
 func main() {
+	registerServiceWithConsul()
+
+	url, _ := lookupServiceWithConsul("account-service")
+	fmt.Println("URL: ", url)
+
 	var logger log.Logger
 	logger = log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
@@ -62,6 +70,7 @@ func main() {
 	mux.Handle("/catalog/", MakeHandler(svc, httpLogger))
 	http.Handle("/", accessControl(mux))
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/healthcheck", healthcheck)
 
 	errs := make(chan error, 2)
 	go func() {
@@ -75,6 +84,35 @@ func main() {
 	}()
 
 	logger.Log("terminated", <-errs)
+}
+
+func registerServiceWithConsul() {
+	config := consulapi.DefaultConfig()
+	consul, err := consulapi.NewClient(config)
+	if err != nil {
+		fmt.Println(err)
+		//log.Fatalln(err)
+	}
+
+	registration := new(consulapi.AgentServiceRegistration)
+
+	registration.ID = "catalog-service"
+	registration.Name = "catalog-service"
+	//address := "localhost"
+	address := "host.docker.internal"
+	registration.Address = address
+	//port, err := strconv.Atoi(port()[1:len(port())])
+	//if err != nil {
+	//	fmt.Println(err)
+	//	//log.Fatalln(err)
+	//}
+	port := 8080
+	registration.Port = port
+	registration.Check = new(consulapi.AgentServiceCheck)
+	registration.Check.HTTP = fmt.Sprintf("http://%s:%v/healthcheck", address, port)
+	registration.Check.Interval = "5s"
+	registration.Check.Timeout = "3s"
+	consul.Agent().ServiceRegister(registration)
 }
 
 func accessControl(h http.Handler) http.Handler {
@@ -97,4 +135,41 @@ func envString(env, fallback string) string {
 		return fallback
 	}
 	return e
+}
+
+func healthcheck(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, `product service is good`)
+}
+
+func port() string {
+	p := os.Getenv("PRODUCT_SERVICE_PORT")
+	if len(strings.TrimSpace(p)) == 0 {
+		return ":8100"
+	}
+	return fmt.Sprintf(":%s", p)
+}
+
+func hostname() string {
+	hn, err := os.Hostname()
+	if err != nil {
+		fmt.Println(err)
+		//log.Fatalln(err)
+	}
+	return hn
+}
+
+func lookupServiceWithConsul(serviceName string) (string, error) {
+	config := consulapi.DefaultConfig()
+	consul, err := consulapi.NewClient(config)
+	if err != nil {
+		return "", err
+	}
+	services, err := consul.Agent().Services()
+	if err != nil {
+		return "", err
+	}
+	srvc := services[serviceName]
+	address := srvc.Address
+	port := srvc.Port
+	return fmt.Sprintf("http://%s:%v", address, port), nil
 }
