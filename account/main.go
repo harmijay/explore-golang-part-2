@@ -6,15 +6,15 @@ import (
 	"flag"
 	"fmt"
 	"github.com/go-kit/kit/log/level"
-	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
+	consulapi "github.com/hashicorp/consul/api"
 	"github.com/go-kit/kit/log"
 	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
 )
@@ -38,7 +38,12 @@ func main() {
 	logger = log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	logger = log.With(logger, "main module", log.DefaultTimestampUTC)
 
-	var db *mongo.Database
+	err := registerService()
+	if err != nil {
+		level.Error(logger).Log("exit", err)
+		os.Exit(-1)
+	}
+
 	db, err := src.GetMongoDB(ctx, dbsource, dbname)
 	if err != nil {
 		level.Error(logger).Log("exit", err)
@@ -75,6 +80,7 @@ func main() {
 
 	http.Handle("/", accessControl(mux))
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/healthcheck", healthcheck)
 
 	errs := make(chan error, 2)
 	go func() {
@@ -104,10 +110,48 @@ func accessControl(h http.Handler) http.Handler {
 	})
 }
 
-func envString(env, fallback string) string {
+func envString(env string, fallback string) string {
 	e := os.Getenv(env)
 	if e == "" {
 		return fallback
 	}
 	return e
+}
+
+func healthcheck(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "user service is good")
+}
+
+
+func registerService() error {
+	config := consulapi.DefaultConfig()
+	consul, err := consulapi.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	port, err := strconv.Atoi(envString("PORT", defaultPort))
+	if err != nil {
+		return err
+	}
+
+	address, err := hostname()
+	if err != nil {
+		return err
+	}
+	registration := new(consulapi.AgentServiceRegistration)
+	registration.ID = "account-service"
+	registration.Name = "account-service"
+	registration.Port = port
+	registration.Check = new(consulapi.AgentServiceCheck)
+	registration.Check.HTTP = fmt.Sprintf("http://%s:%v/healthcheck", address, port)
+	registration.Check.Interval = "5s"
+	registration.Check.Timeout = "3s"
+	consul.Agent().ServiceRegister(registration)
+
+	return nil
+}
+
+func hostname() (string, error) {
+	return "host.docker.internal", nil
 }
