@@ -10,8 +10,8 @@ import (
 var ErrInvalidArgument = errors.New("invalid argument")
 
 type GolfService interface {
-	CreateGolf(ctx context.Context, id string, name string, location string, amenities []string) (string, error)
-	GetGolf(ctx context.Context, id string) (Golf, error)
+	CreateGolf(ctx context.Context, id string, name string, location string, amenities []string) (msg string, err error)
+	GetGolf(ctx context.Context, id string) (g Golf, err error)
 }
 
 type service struct {
@@ -26,7 +26,7 @@ func NewService(rep Repository, logger log.Logger) GolfService {
 	}
 }
 
-func (s service) CreateGolf(ctx context.Context, id string, name string, location string, amenities []string) (string, error) {
+func (s service) CreateGolf(ctx context.Context, id string, name string, location string, amenities []string) (msg string, err error) {
 	logger := log.With(s.logger, "method", "CreateGolf")
 
 	golf := Golf{
@@ -46,7 +46,7 @@ func (s service) CreateGolf(ctx context.Context, id string, name string, locatio
 	return "Success", nil
 }
 
-func (s service) GetGolf(ctx context.Context, id string) (Golf, error) {
+func (s service) GetGolf(ctx context.Context, id string) (g Golf, err error) {
 	if id == "" {
 		return Golf{}, ErrInvalidArgument
 	}
