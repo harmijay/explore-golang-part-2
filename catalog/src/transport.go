@@ -27,9 +27,17 @@ func MakeHandler(svc GolfService, logger log.Logger) http.Handler {
 		opts...,
 	)
 
+	getGolfHandler := kithttp.NewServer(
+		makeGetGolfEndpoint(svc),
+		decodeGolfReqGet,
+		encodeResponse,
+		opts...,
+	)
+
 	r := mux.NewRouter()
 
 	r.Handle("/catalog", createGolfHandler).Methods("POST")
+	r.Handle("/catalog/{id}", getGolfHandler).Methods("GET")
 
 	return r
 }
@@ -46,7 +54,6 @@ func decodeGolfReqCreate(_ context.Context, r *http.Request) (interface{}, error
 	var req CreateGolfRequest
 	body, _ := ioutil.ReadAll(r.Body)
 	err := req.UnmarshalJSON(body)
-	//err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		fmt.Printf("Error %+v", err)
 		return nil, err

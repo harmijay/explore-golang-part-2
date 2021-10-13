@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
+	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
 	"os"
-	//kitprometheus "github.com/go-kit/kit/metrics/prometheus"
-	//httptransport "github.com/go-kit/kit/transport/http"
-	//stdprometheus "github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"os/signal"
 	"syscall"
 )
@@ -30,25 +29,19 @@ func main() {
 		httpAddr = flag.String("http.addr", ":"+addr, "HTTP listen address")
 	)
 
-	//fieldKeys := []string{"method", "error"}
-	//requestCount := kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{
-	//	Namespace: "my_group",
-	//	Subsystem: "catalog_service",
-	//	Name:      "request_count",
-	//	Help:      "Number of requests received.",
-	//}, fieldKeys)
-	//requestLatency := kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
-	//	Namespace: "my_group",
-	//	Subsystem: "order_service",
-	//	Name:      "request_latency_microseconds",
-	//	Help:      "Total duration of requests in microseconds.",
-	//}, fieldKeys)
-	//countResult := kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
-	//	Namespace: "my_group",
-	//	Subsystem: "order_service",
-	//	Name:      "count_result",
-	//	Help:      "The result of each count method.",
-	//}, []string{})
+	fieldKeys := []string{"method"}
+	requestCount := kitprometheus.NewCounterFrom(stdprometheus.CounterOpts{
+		Namespace: "my_group",
+		Subsystem: "catalog_service",
+		Name:      "request_count",
+		Help:      "Number of requests received.",
+	}, fieldKeys)
+	requestLatency := kitprometheus.NewSummaryFrom(stdprometheus.SummaryOpts{
+		Namespace: "my_group",
+		Subsystem: "catalog_service",
+		Name:      "request_latency_microseconds",
+		Help:      "Total duration of requests in microseconds.",
+	}, fieldKeys)
 
 	db := GetMongoDB()
 	var svc GolfService
@@ -60,12 +53,13 @@ func main() {
 		}
 		svc = NewService(repository, logger)
 	}
-	//svc = loggingMiddleware{logger, svc}
-	//svc = instrumentingMiddleware{requestCount, requestLatency, countResult, svc}
+	svc = NewLoggingService(logger, svc)
+	svc = NewInstrumentingService(requestCount, requestLatency, svc)
 
 	mux := http.NewServeMux()
 	httpLogger := log.With(logger, "component", "http")
 	mux.Handle("/catalog", MakeHandler(svc, httpLogger))
+	mux.Handle("/catalog/", MakeHandler(svc, httpLogger))
 	http.Handle("/", accessControl(mux))
 	http.Handle("/metrics", promhttp.Handler())
 
