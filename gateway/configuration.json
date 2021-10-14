@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "name": "My lovely gateway",
+  "port": 8080,
+  "timeout": "10s",
+  "cache_ttl": "3600s",
+  "host": [
+    "http://127.0.0.1:8089"
+  ],
+  "endpoints": [{
+      "endpoint": "/user/{username}",
+      "method": "GET",
+      "backend": [{
+        "host": [
+          "http://127.0.0.1:8080"
+        ],
+        "url_pattern": "/user/{username}"
+      }
+      ],
+      "concurrent_calls": 2,
+      "timeout": "1000s",
+      "cache_ttl": 3600
+    }, {
+      "endpoint": "/user",
+      "method": "POST",
+      "backend": [{
+        "host": [
+          "http://127.0.0.1:8080"
+        ],
+        "url_pattern": "/user"
+      }
+      ],
+      "concurrent_calls": 2,
+      "timeout": "1000s",
+      "cache_ttl": 3600
+    }
+  ]}
